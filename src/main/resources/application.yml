@@ -22,6 +22,10 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  web:
+    locale: en                  # сообщения API всегда на английском независимо от Accept-Language браузера
+    locale-resolver: fixed      # (интерфейс переводит их сам, контракт остаётся детерминированным)
+
   servlet:
     multipart:
       max-file-size: 2MB

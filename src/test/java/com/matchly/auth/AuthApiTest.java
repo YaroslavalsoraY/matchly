@@ -6,6 +6,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -59,6 +60,34 @@ class AuthApiTest extends AbstractApiTest {
                 .andExpect(jsonPath("$.title").value("Validation failed"))
                 .andExpect(jsonPath("$.errors", hasSize(2)))
                 .andExpect(jsonPath("$.errors[*].field", containsInAnyOrder("email", "password")));
+    }
+
+    @Test
+    void register_emailTooLong_orMissingBody_returns400() throws Exception {
+        String longEmail = "a".repeat(250) + "@test.local";
+        mvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(credentials(longEmail, PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field", hasItem("email")));
+
+        mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+
+        mvc.perform(post("/api/auth/register").contentType(MediaType.TEXT_PLAIN).content("email=x"))
+                .andExpect(status().isUnsupportedMediaType())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    }
+
+    @Test
+    void unknownEndpoint_returns404Problem_andWrongMethod_returns405() throws Exception {
+        String token = register(uniqueEmail("routes"), PASSWORD);
+        mvc.perform(get("/api/does-not-exist").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isNotFound());
+        mvc.perform(post("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isMethodNotAllowed())
+                .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
     }
 
     @Test
@@ -138,7 +167,11 @@ class AuthApiTest extends AbstractApiTest {
 
         mvc.perform(delete("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"password\": \"wrong\"}"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail").value("Current password is incorrect"));
+        // сессия при этом остаётся действительной
+        mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk());
 
         mvc.perform(delete("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"password\": \"" + PASSWORD + "\"}"))

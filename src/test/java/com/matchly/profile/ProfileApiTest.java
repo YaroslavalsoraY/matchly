@@ -179,6 +179,93 @@ class ProfileApiTest extends AbstractApiTest {
                 .andExpect(status().isNotFound());
     }
 
+    /** В MockMvc лимит multipart контейнером не применяется, поэтому срабатывает проверка в сервисе (422).
+     *  Реальный Tomcat отвечает 413 раньше; это проверяется вживую (см. отчёт). */
+    @Test
+    void photo_largerThanLimit_isRejectedByService() throws Exception {
+        String token = register(uniqueEmail("bigphoto"), PASSWORD);
+        createProfile(token, profile().build());
+        byte[] tooBig = new byte[2 * 1024 * 1024 + 1];
+        System.arraycopy(TestImages.png(), 0, tooBig, 0, 16);
+
+        mvc.perform(multipart(HttpMethod.PUT, "/api/profiles/me/photo")
+                        .file(new MockMultipartFile("file", "big.png", "image/png", tooBig))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail").value("Photo must not exceed 2 MB"));
+    }
+
+    @Test
+    void photo_emptyFile_returns422() throws Exception {
+        String token = register(uniqueEmail("emptyphoto"), PASSWORD);
+        createProfile(token, profile().build());
+
+        mvc.perform(multipart(HttpMethod.PUT, "/api/profiles/me/photo")
+                        .file(new MockMultipartFile("file", "empty.png", "image/png", new byte[0]))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isUnprocessableContent())
+                .andExpect(jsonPath("$.detail").value("Photo file is empty"));
+    }
+
+    @Test
+    void photo_uploadWithoutProfile_returns404() throws Exception {
+        String token = register(uniqueEmail("nophotoprof"), PASSWORD);
+
+        mvc.perform(multipart(HttpMethod.PUT, "/api/profiles/me/photo")
+                        .file(new MockMultipartFile("file", "me.png", "image/png", TestImages.png()))
+                        .header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("Profile not found"));
+    }
+
+    @Test
+    void tooManyInterests_returns400_andBoundaryValuesAccepted() throws Exception {
+        String token = register(uniqueEmail("limits"), PASSWORD);
+
+        mvc.perform(put("/api/profiles/me").header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(profile().interests(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L, 11L).build()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field", hasItem("interestIds")));
+
+        // ровно 10 интересов и граничные возраста 18 и 99 допустимы
+        mvc.perform(put("/api/profiles/me").header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(profile().interests(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L).ageRange(18, 99).build()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.interests", hasSize(10)));
+
+        // возраст вне 18..99 отклоняется валидацией
+        mvc.perform(put("/api/profiles/me").header(HttpHeaders.AUTHORIZATION, bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(profile().ageRange(17, 100).build()))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[*].field", hasItem("ageMin")))
+                .andExpect(jsonPath("$.errors[*].field", hasItem("ageMax")));
+    }
+
+    @Test
+    void card_ofBlockedUser_looksMissing_andReturnsAfterUnblock() throws Exception {
+        String owner = register(uniqueEmail("blockedcard"), PASSWORD);
+        String viewer = register(uniqueEmail("viewercard"), PASSWORD);
+        long profileId = createProfile(owner, profile().build());
+        String meBody = mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer(owner)))
+                .andReturn().getResponse().getContentAsString();
+        long ownerId = ((Number) JsonPath.read(meBody, "$.id")).longValue();
+        String admin = adminToken();
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/users/{id}/block", ownerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/profiles/{id}", profileId).header(HttpHeaders.AUTHORIZATION, bearer(viewer)))
+                .andExpect(status().isNotFound());
+
+        mvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/api/admin/users/{id}/unblock", ownerId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/profiles/{id}", profileId).header(HttpHeaders.AUTHORIZATION, bearer(viewer)))
+                .andExpect(status().isOk());
+    }
+
     @Test
     void photo_requiresAuthentication() throws Exception {
         mvc.perform(get("/api/profiles/1/photo")).andExpect(status().isUnauthorized());

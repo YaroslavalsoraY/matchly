@@ -11,12 +11,60 @@ const App = (() => {
   const STRATEGY_KEY = 'matchly.strategy';
   const MAX_INTERESTS = 10;
 
+  /** Сообщения API приходят на английском (единый контракт), интерфейс показывает их по-русски. */
+  const MESSAGES = {
+    'Invalid email or password': 'Неверный email или пароль',
+    'Email is already registered': 'Этот email уже зарегистрирован',
+    'Account is blocked': 'Аккаунт заблокирован администратором',
+    'Authentication is required': 'Нужно войти в аккаунт',
+    'Invalid or expired token': 'Сессия истекла, войдите снова',
+    'User no longer exists': 'Аккаунт больше не существует',
+    'Authentication failed': 'Не удалось подтвердить вход',
+    'Access is denied': 'Недостаточно прав для этого действия',
+    'Profile not found': 'Анкета ещё не заполнена',
+    'Photo file is empty': 'Файл пустой',
+    'Photo must not exceed 2 MB': 'Фото больше 2 МБ',
+    'Only JPEG, PNG or WebP images are allowed': 'Допустимы только JPEG, PNG или WebP',
+    'Cannot read uploaded file': 'Не удалось прочитать файл',
+    'You must be at least 18 years old': 'Сервис доступен только с 18 лет',
+    'Minimum age must not exceed maximum age': 'Возраст «от» не может быть больше «до»',
+    'Age range must be within 18-99': 'Возраст должен быть от 18 до 99',
+    'Choose from 1 to 10 interests': 'Выберите от 1 до 10 интересов',
+    'Some of the selected interests do not exist': 'Часть интересов уже удалена, обновите страницу',
+    'You cannot react to your own profile': 'Нельзя оценить собственную анкету',
+    'Interest with this name already exists': 'Такой интерес уже есть',
+    'You cannot block your own account': 'Нельзя заблокировать собственный аккаунт',
+    'You cannot delete your own account here': 'Нельзя удалить собственный аккаунт здесь',
+    'Administrator account cannot be deleted this way': 'Аккаунт администратора так удалить нельзя',
+    'Current password is incorrect': 'Неверный текущий пароль',
+    'Request contains invalid fields': 'Проверьте выделенные поля',
+    'Request conflicts with existing data': 'Данные конфликтуют с уже существующими',
+    'Unexpected error occurred': 'Внутренняя ошибка сервера, попробуйте позже',
+    'must not be blank': 'обязательное поле',
+    'must not be null': 'обязательное поле',
+    'must not be empty': 'выберите хотя бы один вариант',
+    'must be a well-formed email address': 'некорректный email',
+    'must be a past date': 'дата должна быть в прошлом',
+    'password must be 8-72 characters long': 'пароль от 8 до 72 символов',
+    'ageMin must not exceed ageMax': 'возраст «от» больше возраста «до»',
+    'must be greater than or equal to 18': 'не меньше 18',
+    'must be less than or equal to 99': 'не больше 99',
+  };
+  const STATUS_MESSAGES = { 413: 'Файл слишком большой (максимум 2 МБ)', 429: 'Слишком много запросов, подождите', 502: 'Сервер недоступен', 503: 'Сервер временно недоступен', 504: 'Сервер не отвечает' };
+  function translate(message, status) {
+    if (message && MESSAGES[message]) return MESSAGES[message];
+    const size = /^size must be between (\d+) and (\d+)$/.exec(message || '');
+    if (size) return size[1] === '0' ? `не больше ${size[2]} символов` : `от ${size[1]} до ${size[2]} символов`;
+    if (status && STATUS_MESSAGES[status]) return STATUS_MESSAGES[status];
+    return message || 'Что-то пошло не так';
+  }
+
   // ---------- утилиты ----------
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
   const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const app = () => $('#app');
-  const initial = (name) => (name || '?').trim().charAt(0).toUpperCase();
+  const initial = (name) => ((String(name || '').match(/[\p{L}\p{N}]/u) || ['?'])[0]).toUpperCase();
   const formatDate = (iso) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   const options = (map, selected) => Object.entries(map).map(([k, v]) => `<option value="${k}" ${k === selected ? 'selected' : ''}>${esc(v)}</option>`).join('');
   const groupBy = (list, key) => list.reduce((acc, item) => ((acc[item[key]] = acc[item[key]] || []).push(item), acc), {});
@@ -55,16 +103,25 @@ const App = (() => {
     let shown = false;
     for (const error of errors) {
       const target = form.querySelector(`[data-error-for="${error.field}"]`);
-      if (target) { target.textContent = error.message; shown = true; }
+      if (target) { target.textContent = translate(error.message); shown = true; }
     }
     return shown;
   }
+  /** Ошибка бизнес-правила (422) относится к конкретному полю формы, если совпал ключ. */
+  const RULE_FIELDS = [['years old', 'birthDate'], ['Minimum age', 'ageMax'], ['Age range', 'ageMax'], ['interests', 'interestIds'], ['JPEG', 'photo'], ['Photo', 'photo'], ['password', 'password']];
   function handleError(error, form) {
     if (error instanceof Api.ApiError) {
       if (form && error.errors.length && showFieldErrors(form, error.errors)) { toast('Проверьте выделенные поля', 'error'); return; }
-      toast(error.message, 'error');
+      const message = translate(error.message, error.status);
+      if (form && error.status === 422) {
+        const hit = RULE_FIELDS.find(([key]) => (error.message || '').includes(key));
+        const target = hit && form.querySelector(`[data-error-for="${hit[1]}"]`);
+        if (target) { target.textContent = message; target.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+      }
+      toast(message, 'error');
       return;
     }
+    if (error instanceof TypeError) { toast('Нет связи с сервером. Проверьте подключение.', 'error'); return; }
     console.error(error);
     toast('Что-то пошло не так. Попробуйте ещё раз.', 'error');
   }
@@ -77,8 +134,25 @@ const App = (() => {
   }
 
   async function copyText(text) {
-    try { await navigator.clipboard.writeText(text); toast('Скопировано', 'success'); }
-    catch (e) { toast('Не удалось скопировать: ' + text, 'error'); }
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const area = document.createElement('textarea');
+        area.value = text;
+        area.setAttribute('readonly', '');
+        area.style.position = 'fixed';
+        area.style.opacity = '0';
+        document.body.appendChild(area);
+        area.select();
+        const ok = document.execCommand('copy');
+        area.remove();
+        if (!ok) throw new Error('execCommand failed');
+      }
+      toast('Скопировано: ' + text, 'success');
+    } catch (e) {
+      toast('Скопируйте вручную: ' + text, 'error');
+    }
   }
 
   // ---------- сессия и справочники ----------
@@ -100,10 +174,10 @@ const App = (() => {
     navigate('/login');
     toast('Вы вышли из аккаунта');
   }
-  window.addEventListener('matchly:session-expired', () => {
+  window.addEventListener('matchly:session-expired', (event) => {
     Object.assign(state, { user: null, profile: null });
     navigate('/login');
-    toast('Сессия завершена, войдите снова', 'error');
+    toast(translate(event.detail) === event.detail && !event.detail ? 'Сессия завершена, войдите снова' : translate(event.detail), 'error');
   });
 
   // ---------- роутер ----------
@@ -112,7 +186,7 @@ const App = (() => {
     '/onboarding': renderProfileForm, '/profile': renderProfileForm,
     '/discover': renderDiscover, '/matches': renderMatches, '/admin': renderAdmin,
   };
-  const currentPath = () => location.hash.replace(/^#/, '') || '/discover';
+  const currentPath = () => { const path = location.hash.replace(/^#/, ''); return path === '' || path === '/' ? '/discover' : path; };
   function navigate(path) { if (location.hash === '#' + path) route(); else location.hash = path; }
 
   async function route() {
@@ -223,6 +297,7 @@ const App = (() => {
         <header class="page__head">
           <h1>${isNew ? 'Расскажите о себе' : 'Моя анкета'}</h1>
           <p class="muted">${isNew ? 'Анкета нужна, чтобы подбирать людей именно для вас. Это займёт пару минут.' : 'Изменения сразу влияют на подборку.'}</p>
+          ${isNew && state.user.role === 'ADMIN' ? '<p class="muted small">Администратору анкета не обязательна: разделы «Админ» доступны и без неё.</p>' : ''}
         </header>
         <form id="profile-form" class="card form" novalidate>
           <div class="form__row form__row--photo">
@@ -231,7 +306,7 @@ const App = (() => {
               <label class="btn btn--ghost btn--small">Выбрать фото<input id="photo-input" type="file" accept="image/png,image/jpeg,image/webp" hidden></label>
               ${profile?.photoUrl ? '<button type="button" class="btn btn--ghost btn--small btn--danger-text" id="photo-delete">Удалить фото</button>' : ''}
               <span class="muted small">JPEG, PNG или WebP до 2 МБ</span>
-              <span class="field-error" id="photo-error"></span>
+              <span class="field-error" id="photo-error" data-error-for="photo"></span>
             </div>
           </div>
           <div class="grid-2">
@@ -301,8 +376,10 @@ const App = (() => {
       };
       const submit = form.querySelector('button[type=submit]');
       submit.disabled = true;
+      let saved = false;
       try {
         state.profile = await Api.put('/api/profiles/me', body);
+        saved = true;
         if (photoFile) {
           const upload = new FormData();
           upload.append('file', photoFile);
@@ -310,8 +387,17 @@ const App = (() => {
         }
         toast(isNew ? 'Анкета создана. Приятных знакомств!' : 'Сохранено', 'success');
         if (isNew) navigate('/discover'); else { renderNav('/profile'); renderProfileForm(); }
-      } catch (e) { handleError(e, form); }
-      finally { submit.disabled = false; }
+      } catch (e) {
+        if (saved) {
+          // анкета уже сохранена, не прошло только фото: остаёмся в режиме редактирования и показываем причину
+          renderNav('/profile');
+          await renderProfileForm();
+          handleError(e, $('#profile-form'));
+          toast(isNew ? 'Анкета сохранена, но фото не загружено' : 'Данные сохранены, но фото не загружено', 'error');
+        } else {
+          handleError(e, form);
+        }
+      } finally { submit.disabled = false; }
     };
 
     const deleteAccount = $('#delete-account');
@@ -337,7 +423,7 @@ const App = (() => {
   }
 
   // ---------- знакомства ----------
-  const discover = { queue: [], strategy: null, exhausted: false, current: null };
+  const discover = { queue: [], strategy: null, exhausted: false, current: null, seq: 0 };
 
   async function renderDiscover() {
     const strategies = await loadStrategies();
@@ -365,16 +451,20 @@ const App = (() => {
       discover.strategy = radio.value;
       localStorage.setItem(STRATEGY_KEY, radio.value);
       $$('.strategy').forEach((label) => label.classList.toggle('strategy--on', label.querySelector('input').value === radio.value));
-      Object.assign(discover, { queue: [], exhausted: false });
+      Object.assign(discover, { queue: [], exhausted: false, current: null });
       showNextCard();
     }));
     await showNextCard();
   }
 
+  /** Возвращает false, если за время запроса пользователь сменил алгоритм и ответ устарел. */
   async function fetchMore() {
+    const seq = ++discover.seq;
     const result = await Api.get(`/api/recommendations?strategy=${encodeURIComponent(discover.strategy)}&limit=10`);
+    if (seq !== discover.seq) return false;
     discover.queue = result.items;
     discover.exhausted = result.items.length === 0;
+    return true;
   }
 
   async function showNextCard() {
@@ -382,7 +472,7 @@ const App = (() => {
     if (!deck) return;
     if (!discover.queue.length && !discover.exhausted) {
       deck.innerHTML = '<div class="loading">Подбираем…</div>';
-      try { await fetchMore(); } catch (e) { handleError(e); deck.innerHTML = ''; return; }
+      try { if (!(await fetchMore())) return; } catch (e) { handleError(e); deck.innerHTML = '<div class="empty card"><h2>Не удалось загрузить подборку</h2><button class="btn btn--primary" id="reload-deck">Повторить</button></div>'; $('#reload-deck').onclick = () => showNextCard(); return; }
     }
     if (!discover.queue.length) {
       discover.current = null;

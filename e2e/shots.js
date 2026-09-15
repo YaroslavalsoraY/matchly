@@ -1,5 +1,5 @@
 const { chromium } = require('playwright');
-const BASE = 'http://localhost:8080';
+const BASE = process.env.MATCHLY_URL || 'http://localhost:8080';
 const OUT = process.argv[2] || (__dirname + '/clean/');
 
 async function login(page, email, password) {

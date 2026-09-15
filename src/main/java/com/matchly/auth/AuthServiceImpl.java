@@ -74,7 +74,8 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findById(principal.id())
                 .orElseThrow(() -> new NotFoundException("User", principal.id()));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new InvalidCredentialsException();
+            // пользователь аутентифицирован, ошибка не в сессии, а в подтверждении: 422, а не 401
+            throw new BusinessRuleException("Current password is incorrect");
         }
         if (user.isAdmin()) {
             throw new BusinessRuleException("Administrator account cannot be deleted this way");

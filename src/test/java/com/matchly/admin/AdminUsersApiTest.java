@@ -99,6 +99,29 @@ class AdminUsersApiTest extends AbstractApiTest {
                 .andExpect(status().isUnprocessableContent());
     }
 
+    @Test
+    void list_pagination_clampsSizeAndHandlesOutOfRangePage() throws Exception {
+        String admin = adminToken();
+
+        mvc.perform(get("/api/admin/users").param("size", "1000").header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(100));
+        mvc.perform(get("/api/admin/users").param("size", "0").param("page", "-3").header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.page").value(0));
+        mvc.perform(get("/api/admin/users").param("page", "9999").header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content").isEmpty());
+        mvc.perform(get("/api/admin/users").param("q", "   ").header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+        mvc.perform(get("/api/admin/users/{id}", 999_999).header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isNotFound());
+        mvc.perform(get("/api/admin/users/{id}", "abc").header(HttpHeaders.AUTHORIZATION, bearer(admin)))
+                .andExpect(status().isBadRequest());
+    }
+
     private long idOf(String token) throws Exception {
         String body = mvc.perform(get("/api/auth/me").header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isOk())

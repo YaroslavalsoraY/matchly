@@ -109,11 +109,19 @@ class RecommendationApiTest extends AbstractApiTest {
     }
 
     @Test
-    void unknownStrategy_returns400() throws Exception {
+    void unknownStrategy_orBadLimit_returns400_andLimitIsClamped() throws Exception {
         String token = register(uniqueEmail("badstrategy"), PASSWORD);
         createProfile(token, senior("Bad").build());
         mvc.perform(get("/api/recommendations").param("strategy", "MAGIC").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400));
+        mvc.perform(get("/api/recommendations").param("limit", "abc").header(HttpHeaders.AUTHORIZATION, bearer(token)))
                 .andExpect(status().isBadRequest());
+        // отрицательный и огромный limit не ломают запрос: значение приводится к диапазону 1..50
+        mvc.perform(get("/api/recommendations").param("limit", "-5").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/recommendations").param("limit", "100000").header(HttpHeaders.AUTHORIZATION, bearer(token)))
+                .andExpect(status().isOk());
     }
 
     @Test

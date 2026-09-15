@@ -1,5 +1,5 @@
 const { chromium } = require('playwright');
-const BASE = 'http://localhost:8080';
+const BASE = process.env.MATCHLY_URL || 'http://localhost:8080';
 const SHOTS = __dirname + '/shots/';
 const stamp = Date.now();
 const emailA = `alisa${stamp}@e2e.local`;

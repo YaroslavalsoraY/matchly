@@ -26,86 +26,74 @@ springdoc-openapi (Swagger UI), Lombok, JUnit 5, Mockito, H2 (только дл�
 
 ## Быстрый старт
 
-Нужны только JDK 21 и PostgreSQL. Maven ставить не нужно: в проекте есть Maven Wrapper (`mvnw`, `mvnw.cmd`),
-который сам скачает нужную версию при первом запуске.
+Единая точка входа: скрипт `start.sh` (Linux, macOS) или `start.cmd` (Windows) в корне проекта.
+Он проверяет Java, находит или поднимает PostgreSQL и запускает приложение вместе с интерфейсом.
 
-### Шаг 1. JDK 21
+| Команда | Что делает |
+|---------|------------|
+| `./start.sh` / `start.cmd` | локальный режим: нужна Java 21; если PostgreSQL не отвечает, база поднимается в Docker автоматически |
+| `./start.sh --docker` / `start.cmd --docker` | всё в Docker одной командой: собирает образ, поднимает базу и приложение (Java на машине не нужна) |
+| `./start.sh --stop` / `start.cmd --stop` | останавливает контейнеры |
+| `./start.sh --test` / `start.cmd --test` | прогоняет автотесты (база не нужна) |
 
-**Windows** (PowerShell или cmd):
+После запуска интерфейс доступен на http://localhost:8080. Первый запуск скачивает зависимости (2-3 минуты),
+дальнейшие занимают секунды. При первом старте создаются схема базы, администратор и 60 демо-анкет.
+
+### Вариант 1. Всё в Docker
+
+Нужен только Docker (на Windows и macOS: Docker Desktop).
+
+```bash
+./start.sh --docker        # Windows: start.cmd --docker
+```
+
+Это эквивалент `docker compose up --build`. Данные базы и логи хранятся в томах Docker и переживают перезапуск;
+`docker compose down -v` удаляет их.
+
+### Вариант 2. Локально: Java 21 + PostgreSQL
+
+**Шаг 1. JDK 21.**
+
+Windows (PowerShell):
 
 ```powershell
 winget install EclipseAdoptium.Temurin.21.JDK
 ```
 
-После установки откройте новое окно терминала и проверьте: `java -version` должна показать `21`.
-Если команда не найдена, задайте переменную `JAVA_HOME` (например, `C:\Program Files\Eclipse Adoptium\jdk-21.x.x-hotspot`)
-и добавьте `%JAVA_HOME%\bin` в `PATH`.
+Откройте новое окно терминала и проверьте: `java -version` показывает `21`. Если команда не найдена, задайте `JAVA_HOME`
+(например, `C:\Program Files\Eclipse Adoptium\jdk-21.x.x-hotspot`) и добавьте `%JAVA_HOME%\bin` в `PATH`.
 
-**Linux** (Ubuntu/Debian):
+Linux (Ubuntu/Debian):
 
 ```bash
 sudo apt install openjdk-21-jdk
 ```
 
-Без прав администратора можно распаковать [Temurin JDK 21](https://adoptium.net/temurin/releases/?version=21) в `~/.jdks`
-и указать `export JAVA_HOME=~/.jdks/jdk-21...; export PATH=$JAVA_HOME/bin:$PATH` (скрипт `run.sh` находит такой JDK сам).
+Без прав администратора распакуйте [Temurin JDK 21](https://adoptium.net/temurin/releases/?version=21) в `~/.jdks`:
+`start.sh` найдёт его сам.
 
-### Шаг 2. База данных PostgreSQL
+**Шаг 2. PostgreSQL.** Нужна база `matchly_db` и роль `matchly` с паролем `matchly` (меняются через `.env`, см. ниже).
+Если Docker установлен, этот шаг можно пропустить: `start.sh` поднимет базу в контейнере сам. Иначе:
 
-Приложению нужна база `matchly_db` и роль `matchly` с паролем `matchly` (значения можно изменить через переменные окружения, см. ниже).
-Выберите один из вариантов.
+- Windows: установите PostgreSQL 16 (`winget install PostgreSQL.PostgreSQL.16` или установщик с
+  [postgresql.org](https://www.postgresql.org/download/windows/)) и выполните из папки проекта
+  `& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -f infra\init-db.sql`.
+- Linux: `sudo apt install postgresql` и `sudo -u postgres psql -f infra/init-db.sql`.
+  Без прав root можно поднять кластер от своего пользователя: `infra/pg-local.sh start`, затем
+  `psql -h localhost -U postgres -f infra/init-db.sql`.
 
-**Вариант A. Docker (Windows с Docker Desktop или Linux):**
+Скрипт `infra/init-db.sql` идемпотентен. Таблицы создаёт само приложение (Flyway).
 
-```bash
-docker compose -f infra/docker-compose.yml up -d
-```
-
-**Вариант B. Локальный PostgreSQL на Windows.** Установите PostgreSQL 16
-(`winget install PostgreSQL.PostgreSQL.16` или установщик с [postgresql.org](https://www.postgresql.org/download/windows/)),
-запомните пароль пользователя `postgres`, затем выполните в PowerShell из папки проекта:
-
-```powershell
-& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -f infra\init-db.sql
-```
-
-**Вариант C. Локальный PostgreSQL на Linux:**
+**Шаг 3. Запуск.**
 
 ```bash
-sudo apt install postgresql
-sudo -u postgres psql -f infra/init-db.sql
+./start.sh                 # Windows: start.cmd  (в PowerShell: .\start.cmd)
 ```
 
-Без прав root можно поднять кластер от своего пользователя: `infra/pg-local.sh start` (см. комментарии в скрипте),
-затем `psql -h localhost -U postgres -f infra/init-db.sql`.
+Альтернатива без скриптов: `./mvnw -DskipTests package` и `java -jar target/matchly.jar`
+(Windows: `mvnw.cmd -DskipTests package`).
 
-Скрипт `infra/init-db.sql` идемпотентен: повторный запуск ничего не сломает. Таблицы создаёт само приложение (Flyway) при старте.
-
-### Шаг 3. Запуск
-
-**Windows:**
-
-```powershell
-.\run.cmd
-```
-
-**Linux / macOS:**
-
-```bash
-./run.sh
-```
-
-Оба скрипта выполняют `mvnw spring-boot:run`. Первый запуск скачивает зависимости (2-3 минуты), дальнейшие занимают секунды.
-Альтернатива: собрать jar и запускать его напрямую.
-
-```bash
-./mvnw -DskipTests package          # Windows: mvnw.cmd -DskipTests package
-java -jar target/matchly.jar
-```
-
-При первом старте приложение создаст схему базы, администратора и 60 демо-анкет.
-
-### Шаг 4. Открыть
+### Адреса и учётные записи
 
 | Что | Адрес |
 |-----|-------|
@@ -113,8 +101,6 @@ java -jar target/matchly.jar
 | Swagger UI | http://localhost:8080/swagger-ui.html |
 | OpenAPI JSON | http://localhost:8080/v3/api-docs |
 | Проверка состояния | http://localhost:8080/actuator/health |
-
-Учётные записи:
 
 | Роль | Email | Пароль |
 |------|-------|--------|
@@ -125,11 +111,13 @@ java -jar target/matchly.jar
 
 ## Настройка
 
-Все параметры задаются переменными окружения; без них используются значения по умолчанию.
+Все параметры задаются переменными окружения или файлом `.env` в корне проекта (шаблон: `.env.example`).
+Файл `.env` читают и `docker compose`, и скрипты `start.sh` / `start.cmd`. Без настроек действуют значения по умолчанию.
 
 | Переменная | По умолчанию | Назначение |
 |------------|--------------|------------|
-| `MATCHLY_DB_URL` | `jdbc:postgresql://localhost:5432/matchly_db` | JDBC-адрес базы |
+| `MATCHLY_DB_HOST` / `MATCHLY_DB_PORT` / `MATCHLY_DB_NAME` | `localhost` / `5432` / `matchly_db` | где искать базу (используют скрипты и compose) |
+| `MATCHLY_DB_URL` | собирается из значений выше | полный JDBC-адрес, если нужен нестандартный |
 | `MATCHLY_DB_USER` | `matchly` | пользователь базы |
 | `MATCHLY_DB_PASSWORD` | `matchly` | пароль базы |
 | `MATCHLY_PORT` | `8080` | HTTP-порт |
@@ -143,17 +131,17 @@ java -jar target/matchly.jar
 
 ```powershell
 # Windows PowerShell
-$env:MATCHLY_DB_PASSWORD = "secret"; .\run.cmd
+$env:MATCHLY_DB_PASSWORD = "secret"; .\start.cmd
 ```
 
 ```cmd
 :: Windows cmd
-set MATCHLY_DB_PASSWORD=secret && run.cmd
+set MATCHLY_DB_PASSWORD=secret && start.cmd
 ```
 
 ```bash
 # Linux / macOS
-MATCHLY_DB_PASSWORD=secret ./run.sh
+MATCHLY_DB_PASSWORD=secret ./start.sh
 ```
 
 ## Тесты
@@ -162,10 +150,11 @@ MATCHLY_DB_PASSWORD=secret ./run.sh
 ./mvnw test          # Windows: mvnw.cmd test
 ```
 
-81 автотест (JUnit 5, Mockito, MockMvc) выполняются на встроенной H2 и не требуют PostgreSQL или Docker,
+89 автотестов (JUnit 5, Mockito, MockMvc) выполняются на встроенной H2 и не требуют PostgreSQL или Docker,
 поэтому одинаково работают на Windows и Linux. Отчёты: `target/surefire-reports`.
 
-Сквозные браузерные тесты интерфейса (Playwright, нужен Node.js) описаны в [e2e/README.md](e2e/README.md).
+Сквозные браузерные тесты интерфейса (Playwright, нужен Node.js): основной сценарий из 18 шагов и сценарий
+корнер-кейсов из 19 групп проверок. Описание в [e2e/README.md](e2e/README.md).
 
 ## Структура проекта
 
@@ -191,7 +180,10 @@ src/main/resources
 ├── db/migration/             миграции Flyway (V1..V4)
 └── static/                   интерфейс: index.html, css/app.css, js/app.js, js/api.js
 src/test/java                 unit- и API-тесты
-infra/                        init-db.sql, docker-compose.yml, pg-local.sh
+start.sh, start.cmd           единая точка входа (Linux/macOS и Windows)
+Dockerfile, docker-compose.yml образ приложения и запуск всего стека в Docker
+.env.example                  шаблон настроек
+infra/                        init-db.sql, pg-local.sh
 e2e/                          браузерные тесты Playwright
 docs/                         отчёт, инструкция по интеграции, скриншоты
 ```
@@ -201,6 +193,7 @@ docs/                         отчёт, инструкция по интегр
 - **`Connection refused` при старте.** PostgreSQL не запущен или слушает другой порт. Проверьте `pg_isready -h localhost -p 5432`
   (Windows: `"C:\Program Files\PostgreSQL\16\bin\pg_isready.exe"`), при необходимости задайте `MATCHLY_DB_URL`.
 - **`password authentication failed for user "matchly"`.** Не выполнен `infra/init-db.sql` или изменён пароль: задайте `MATCHLY_DB_PASSWORD`.
-- **Порт 8080 занят.** Запустите с другим портом: `MATCHLY_PORT=8081 ./run.sh` (Windows: `$env:MATCHLY_PORT=8081; .\run.cmd`).
+- **Порт 8080 занят.** Запустите с другим портом: `MATCHLY_PORT=8081 ./start.sh` (Windows: `$env:MATCHLY_PORT=8081; .\start.cmd`).
+- **`permission denied` при обращении к Docker на Linux.** Добавьте себя в группу docker: `sudo usermod -aG docker $USER` и войдите в систему заново.
 - **Кракозябры в консоли Windows.** Выполните `chcp 65001` перед запуском или смотрите файл `logs/matchly.log` (он всегда в UTF-8).
 - **`java` не найдена.** Установите JDK 21 и откройте новое окно терминала, чтобы обновился `PATH`.

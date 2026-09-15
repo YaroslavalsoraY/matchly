@@ -1,0 +1,8 @@
+target/
+logs/
+e2e/
+docs/
+.git/
+.idea/
+.vscode/
+*.md

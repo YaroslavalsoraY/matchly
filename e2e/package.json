@@ -6,7 +6,9 @@
   "scripts": {
     "install-browser": "playwright install chromium",
     "test": "node e2e.js",
-    "shots": "node shots.js ../docs/screenshots/"
+    "shots": "node shots.js ../docs/screenshots/",
+    "test:corner": "node corner.js",
+    "test:all": "node e2e.js && node corner.js"
   },
   "devDependencies": {
     "playwright": "1.47.2"

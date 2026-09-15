@@ -35,3 +35,6 @@ logs/
 
 ### Node (e2e) ###
 node_modules/
+
+### local config ###
+.env

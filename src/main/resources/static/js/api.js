@@ -36,7 +36,7 @@ const Api = (() => {
       // токен есть, но сервер его не принимает: аккаунт удалён, заблокирован или токен истёк
       if (response.status === 401 && token && !url.startsWith('/api/auth/login')) {
         setToken(null);
-        window.dispatchEvent(new CustomEvent('matchly:session-expired'));
+        window.dispatchEvent(new CustomEvent('matchly:session-expired', { detail: data && data.detail }));
       }
       throw new ApiError(data, response.status);
     }

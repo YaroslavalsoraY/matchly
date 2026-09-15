@@ -17,6 +17,7 @@ Spring Security (JWT), Swagger и веб-интерфейсом.
 - Swagger UI, логирование в консоль и файл, единый формат ошибок (RFC 9457 `application/problem+json`).
 
 Подробное описание архитектуры и алгоритмов: [docs/REPORT.md](docs/REPORT.md).
+Путеводитель по коду с объяснением каждого файла и сквозных сценариев: [docs/CODE_GUIDE.md](docs/CODE_GUIDE.md).
 Как встроить модуль рекомендаций в другое приложение: [docs/INTEGRATION.md](docs/INTEGRATION.md).
 
 ## Стек

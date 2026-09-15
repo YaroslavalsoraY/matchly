@@ -1,0 +1,23 @@
+# Альтернатива локальной установке PostgreSQL: база в Docker (Docker Desktop на Windows или docker на Linux).
+#   docker compose -f infra/docker-compose.yml up -d
+# Параметры совпадают со значениями по умолчанию в application.yml.
+services:
+  db:
+    image: postgres:16
+    container_name: matchly-db
+    environment:
+      POSTGRES_DB: matchly_db
+      POSTGRES_USER: matchly
+      POSTGRES_PASSWORD: matchly
+    ports:
+      - "5432:5432"
+    volumes:
+      - matchly-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matchly -d matchly_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  matchly-pgdata:

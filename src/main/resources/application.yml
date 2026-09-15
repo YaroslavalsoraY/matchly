@@ -1,0 +1,59 @@
+# Основная конфигурация Matchly.
+# Все значения, зависящие от окружения, берутся из переменных окружения
+# с разумными значениями по умолчанию, поэтому файл одинаков для Windows и Linux.
+spring:
+  application:
+    name: matchly
+
+  datasource:
+    url: ${MATCHLY_DB_URL:jdbc:postgresql://localhost:5432/matchly_db}
+    username: ${MATCHLY_DB_USER:matchly}
+    password: ${MATCHLY_DB_PASSWORD:matchly}
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate          # схема управляется Flyway, Hibernate только проверяет соответствие
+    properties:
+      hibernate:
+        default_batch_fetch_size: 50
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  servlet:
+    multipart:
+      max-file-size: 2MB
+      max-request-size: 3MB
+
+server:
+  port: ${MATCHLY_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: alpha
+    tags-sorter: alpha
+
+# Настройки самого приложения (биндятся в MatchlyProperties)
+matchly:
+  security:
+    # Секрет для подписи JWT (HMAC-SHA256). Минимум 32 байта. В проде задать через переменную окружения.
+    jwt-secret: ${MATCHLY_JWT_SECRET:matchly-dev-secret-key-change-me-please-0123456789}
+    jwt-ttl: ${MATCHLY_JWT_TTL:12h}
+  seed:
+    enabled: ${MATCHLY_SEED:true}   # генерировать демо-профили при первом запуске
+    profiles: 60
+  admin:
+    # Администратор создаётся при первом запуске, если такого email ещё нет
+    email: ${MATCHLY_ADMIN_EMAIL:admin@matchly.local}
+    password: ${MATCHLY_ADMIN_PASSWORD:admin123}

@@ -1,0 +1,14 @@
+{
+  "name": "matchly-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Сквозные браузерные тесты интерфейса Matchly (Playwright). Требуют запущенного приложения на http://localhost:8080",
+  "scripts": {
+    "install-browser": "playwright install chromium",
+    "test": "node e2e.js",
+    "shots": "node shots.js ../docs/screenshots/"
+  },
+  "devDependencies": {
+    "playwright": "1.47.2"
+  }
+}

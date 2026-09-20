@@ -702,6 +702,12 @@ const App = (() => {
         ${strategies.map((s) => `<label class="strategy ${s.type === settings.defaultStrategy ? 'strategy--on' : ''}">
           <input type="radio" name="default-strategy" value="${s.type}" ${s.type === settings.defaultStrategy ? 'checked' : ''}>
           <span class="strategy__title">${esc(s.title)}</span><span class="strategy__desc">${esc(s.description)}</span></label>`).join('')}
+      </div>
+      <div class="card settings-list" style="margin-top:1rem">
+        <h3>Демо-данные</h3>
+        <p class="muted small">Создаёт демонстрационные анкеты demo1…demoN@matchly.local (пароль demo1234) с фото, лайками и матчами.
+        Если они уже есть, ничего не изменится.</p>
+        <div><button class="btn btn--primary btn--small" id="seed-demo">Создать демо-анкеты</button></div>
       </div>`;
     $$('input[name=default-strategy]').forEach((radio) => (radio.onchange = async () => {
       try {
@@ -711,6 +717,21 @@ const App = (() => {
         renderAdminTab();
       } catch (e) { handleError(e); }
     }));
+    $('#seed-demo').onclick = async () => {
+      const button = $('#seed-demo');
+      button.disabled = true; button.textContent = 'Создаём…';
+      try {
+        const result = await Api.post('/api/admin/demo-data');
+        const messages = {
+          SEEDED: `Создано анкет: ${result.profiles}, лайков: ${result.likes}, матчей: ${result.matches}`,
+          ALREADY_PRESENT: 'Демо-анкеты уже есть, ничего не добавлено',
+          NO_INTERESTS: 'Справочник интересов пуст: сначала добавьте интересы',
+          DISABLED: 'Генерация отключена',
+        };
+        toast(messages[result.status] || result.status, result.status === 'SEEDED' ? 'success' : 'info');
+      } catch (e) { handleError(e); }
+      finally { button.disabled = false; button.textContent = 'Создать демо-анкеты'; }
+    };
   }
 
   // ---------- запуск ----------

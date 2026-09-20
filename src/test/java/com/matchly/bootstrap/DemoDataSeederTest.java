@@ -50,7 +50,7 @@ class DemoDataSeederTest {
         assertThat(matchRepository.count()).isGreaterThanOrEqualTo(0);
 
         User demo = userRepository.findByEmailIgnoreCase("demo1@matchly.local").orElseThrow();
-        assertThat(passwordEncoder.matches(DemoDataSeeder.PASSWORD, demo.getPasswordHash())).isTrue();
+        assertThat(passwordEncoder.matches(DemoDataService.PASSWORD, demo.getPasswordHash())).isTrue();
         assertThat(profileRepository.findByUserId(demo.getId())).isPresent();
 
         long reactionsBefore = reactionRepository.count();

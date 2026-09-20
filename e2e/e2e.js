@@ -174,8 +174,10 @@ async function api(request, method, url, body, token) {
     await page.waitForFunction(() => document.querySelector('input[name=default-strategy][value=CONTENT]')?.checked);
     await page.click('label.strategy:has(input[name=default-strategy][value=HYBRID])');
     await page.waitForFunction(() => document.querySelector('input[name=default-strategy][value=HYBRID]')?.checked);
+    await page.click('#seed-demo');
+    await page.waitForFunction(() => [...document.querySelectorAll('.toast')].some((t) => t.textContent.includes('уже есть') || t.textContent.includes('Создано анкет')));
     await shot('09-admin-settings');
-    step('админ: алгоритм по умолчанию переключён и возвращён');
+    step('админ: алгоритм по умолчанию переключён и возвращён, кнопка демо-данных отвечает');
 
     // 9. Удаление пользователей теста через админ-API
     const admin = await api(context.request, 'POST', '/api/auth/login', { email: 'admin@matchly.local', password: 'admin123' });

@@ -12,4 +12,5 @@ spring:
 
 matchly:
   seed:
-    enabled: false
+    enabled: false      # автозапуск выключен; ручной посев через API в тестах создаёт 8 анкет
+    profiles: 8
